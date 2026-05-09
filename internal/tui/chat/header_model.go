@@ -248,11 +248,24 @@ func (h *HeaderModel) RefreshGitInfo() {
 // GetHeight returns the header height based on display mode
 func (h *HeaderModel) GetHeight() int {
 	if h.multiLine && h.width >= 80 {
-		// Two bordered boxes: each takes 3 lines (border + content + border)
-		// Plus one line spacing between boxes
-		return 7 // 3 + 1 + 3
+		// App info box: 1 content line + 2 border lines = 3
+		// Separator newline: 1
+		// Session box: session content lines + 2 border lines
+		sessionLines := h.sessionLineCount()
+		return 3 + 1 + sessionLines + 2
 	}
 	return h.theme.HeaderHeight // Default single line
+}
+
+// sessionLineCount returns the number of content lines in the session box
+func (h *HeaderModel) sessionLineCount() int {
+	count := 3 // session line, workdir, model
+	count++    // provider
+	if h.gitRepo {
+		count++ // branch
+	}
+	count++ // status
+	return count
 }
 
 // GetSessionID returns the session ID

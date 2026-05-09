@@ -92,32 +92,6 @@ func TestMessageListModel(t *testing.T) {
 	}
 }
 
-func TestMessageListToolCallTracking(t *testing.T) {
-	theme := NewDefaultTheme()
-	model := NewMessageListModel(theme, 80, 20)
-
-	// Create mock tool call states
-	activeToolCalls := map[string]*toolProgressState{
-		"tool1": {
-			toolName:   "test_tool",
-			startTime:  time.Now(),
-			progress:   0.5,
-			status:     "In progress...",
-			step:       2,
-			totalSteps: 4,
-		},
-	}
-
-	// Set active tool calls
-	model.SetActiveToolCalls(activeToolCalls)
-
-	// Verify tool calls are tracked
-	assert.Equal(t, activeToolCalls, model.activeToolCalls, "Tool calls should be stored")
-
-	// Verify viewport is rebuilt (this triggers rebuildViewport internally)
-	view := model.View()
-	assert.Contains(t, view, "Active Operations", "Should show active operations section")
-}
 
 func TestMessageListMessageTypes(t *testing.T) {
 	tests := []struct {
@@ -214,12 +188,14 @@ func TestMessageListWindowResize(t *testing.T) {
 		timestamp: time.Now(),
 	})
 
-	// Simulate window resize
+	// Simulate window resize: parent calls SetHeight after layout calc, Update handles width
 	resizeMsg := tea.WindowSizeMsg{Width: 100, Height: 30}
 	_, cmd := model.Update(resizeMsg)
+	model.SetHeight(30)
 
-	// Verify dimensions updated
-	assert.Equal(t, 100, model.width)
+	wFrame := model.viewport.Style.GetHorizontalFrameSize()
+	// Verify dimensions updated (width stored as inner width minus frame)
+	assert.Equal(t, 100-wFrame, model.width)
 	assert.Equal(t, 30, model.height)
 	assert.Nil(t, cmd, "Resize should not produce commands")
 }

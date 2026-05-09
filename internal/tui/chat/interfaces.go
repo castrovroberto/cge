@@ -293,6 +293,23 @@ func (r *RealChatService) cleanToolOutput(text string) string {
 	return cleaned
 }
 
+// toolStartMsg and toolCompleteMsg are used internally by RealChatService to signal
+// tool lifecycle events to the Bubble Tea event loop.
+type toolStartMsg struct {
+	toolCallID string
+	toolName   string
+	params     map[string]interface{}
+}
+
+type toolCompleteMsg struct {
+	toolCallID string
+	toolName   string
+	success    bool
+	result     string
+	duration   time.Duration
+	error      string
+}
+
 // RealDelayProvider provides actual time delays
 type RealDelayProvider struct{}
 

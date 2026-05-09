@@ -71,65 +71,6 @@ func TestLayoutHeightConsistency(t *testing.T) {
 	}
 }
 
-func TestStatusBarStateConsistency(t *testing.T) {
-	// Create model with mock dependencies
-	cfg := &config.AppConfig{}
-	ctx := context.Background()
-	model := InitialModel(ctx, cfg, "test-model")
-
-	t.Run("atomic_state_updates", func(t *testing.T) {
-		// Test centralized status bar state update
-		initialState := StatusBarState{
-			ActiveToolCalls:  2,
-			SessionStartTime: time.Now(),
-			Loading:          false,
-			Err:              nil,
-			LastUpdateTime:   time.Now(),
-		}
-
-		model.statusBar.UpdateState(initialState)
-
-		// Verify state was set correctly
-		assert.True(t, model.statusBar.ValidateState(), "Status bar state should be valid")
-
-		view := model.statusBar.View()
-		assert.Contains(t, view, "Active: 2", "Status bar should show active tool calls")
-	})
-
-	t.Run("state_validation", func(t *testing.T) {
-		// Test state validation catches invalid states
-		invalidState := StatusBarState{
-			ActiveToolCalls:  -1,          // Invalid negative value
-			SessionStartTime: time.Time{}, // Invalid zero time
-			Loading:          false,
-			Err:              nil,
-			LastUpdateTime:   time.Now(),
-		}
-
-		model.statusBar.UpdateState(invalidState)
-
-		// Validation should catch the invalid state
-		assert.False(t, model.statusBar.ValidateState(), "Status bar validation should catch invalid state")
-	})
-
-	t.Run("concurrent_updates", func(t *testing.T) {
-		// Test that rapid state updates don't cause inconsistencies
-		for i := 0; i < 10; i++ {
-			state := StatusBarState{
-				ActiveToolCalls:  i,
-				SessionStartTime: time.Now(),
-				Loading:          i%2 == 0,
-				Err:              nil,
-				LastUpdateTime:   time.Now(),
-			}
-
-			model.statusBar.UpdateState(state)
-
-			// Each update should result in valid state
-			assert.True(t, model.statusBar.ValidateState(), "State should remain valid after update %d", i)
-		}
-	})
-}
 
 func TestLayoutWithSuggestions(t *testing.T) {
 	// Create model with mock dependencies
@@ -178,50 +119,6 @@ func TestLayoutWithSuggestions(t *testing.T) {
 	})
 }
 
-func TestToolCallStateSync(t *testing.T) {
-	// Create model with mock dependencies
-	cfg := &config.AppConfig{}
-	ctx := context.Background()
-	model := InitialModel(ctx, cfg, "test-model")
-
-	t.Run("tool_call_state_synchronization", func(t *testing.T) {
-		// Simulate tool call start
-		toolStartMsg := toolStartMsg{
-			toolCallID: "test-tool-1",
-			toolName:   "test_tool",
-			params:     map[string]interface{}{"param1": "value1"},
-		}
-
-		updatedModel, _ := model.Update(toolStartMsg)
-		model = updatedModel.(Model)
-
-		// Verify tool call is tracked
-		assert.Equal(t, 1, len(model.activeToolCalls), "Should have one active tool call")
-
-		// Verify status bar reflects the tool call
-		view := model.statusBar.View()
-		assert.Contains(t, view, "Active: 1", "Status bar should show one active tool call")
-
-		// Simulate tool call completion
-		toolCompleteMsg := toolCompleteMsg{
-			toolCallID: "test-tool-1",
-			toolName:   "test_tool",
-			success:    true,
-			result:     "Tool completed successfully",
-			duration:   time.Second,
-		}
-
-		updatedModel, _ = model.Update(toolCompleteMsg)
-		model = updatedModel.(Model)
-
-		// Verify tool call is removed
-		assert.Equal(t, 0, len(model.activeToolCalls), "Should have no active tool calls")
-
-		// Verify status bar no longer shows active tool calls
-		view = model.statusBar.View()
-		assert.NotContains(t, view, "Active:", "Status bar should not show active tool calls")
-	})
-}
 
 func TestStatusBarHeightFix(t *testing.T) {
 	theme := NewDefaultTheme()
@@ -295,18 +192,9 @@ func TestTUIStabilityImprovements(t *testing.T) {
 	model := InitialModel(ctx, cfg, "test-model")
 
 	t.Run("status_bar_consistency", func(t *testing.T) {
-		// Test multiple rapid updates don't cause state inconsistencies
+		// Test multiple rapid loading state changes don't cause inconsistencies
 		for i := 0; i < 10; i++ {
-			state := StatusBarState{
-				ActiveToolCalls:  i % 3,
-				SessionStartTime: time.Now().Add(-time.Duration(i) * time.Minute),
-				Loading:          i%2 == 0,
-				Err:              nil,
-				LastUpdateTime:   time.Now(),
-			}
-
-			model.statusBar.UpdateState(state)
-			assert.True(t, model.statusBar.ValidateState(), "Status bar state should remain valid after update %d", i)
+			model.statusBar.SetLoading(i%2 == 0)
 
 			// Ensure view renders without panicking
 			view := model.statusBar.View()

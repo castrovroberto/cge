@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/castrovroberto/CGE/internal/agent"
@@ -21,6 +22,7 @@ type ChatPresenter struct {
 	messagesChan chan ChatMessage
 	ctx          context.Context
 	cancelCtx    context.CancelFunc
+	wg           sync.WaitGroup
 	systemPrompt string
 	modelName    string
 }
@@ -31,7 +33,7 @@ func NewChatPresenter(ctx context.Context, llmClient llm.Client, toolRegistry *a
 	presenter := &ChatPresenter{
 		llmClient:    llmClient,
 		toolRegistry: toolRegistry,
-		messagesChan: make(chan ChatMessage, 10), // Buffered channel
+		messagesChan: make(chan ChatMessage, 100), // Buffered to absorb bursts during agent runs
 		ctx:          pCtx,
 		cancelCtx:    pCancel,
 		systemPrompt: systemPrompt,
@@ -46,7 +48,7 @@ func NewChatPresenter(ctx context.Context, llmClient llm.Client, toolRegistry *a
 
 // Send implements MessageProvider.Send
 func (p *ChatPresenter) Send(ctx context.Context, prompt string) error {
-	// Start processing asynchronously
+	p.wg.Add(1)
 	go p.processPromptAsync(ctx, prompt)
 	return nil
 }
@@ -59,12 +61,16 @@ func (p *ChatPresenter) Messages() <-chan ChatMessage {
 // Close implements MessageProvider.Close
 func (p *ChatPresenter) Close() error {
 	p.cancelCtx()
+	p.wg.Wait() // wait for all in-flight goroutines to finish before closing channel
 	close(p.messagesChan)
 	return nil
 }
 
 // processPromptAsync handles the actual agent interaction asynchronously
 func (p *ChatPresenter) processPromptAsync(ctx context.Context, prompt string) {
+	defer p.wg.Done()
+	defer p.sendMessage(ChatMessage{Type: TurnComplete})
+
 	// Generate unique ID for this conversation turn
 	turnID := p.generateID()
 
@@ -152,15 +158,11 @@ func (p *ChatPresenter) convertRunResultToMessages(result *orchestrator.RunResul
 	}
 }
 
-// sendMessage safely sends a message to the channel
+// sendMessage safely sends a message to the channel, blocking until sent or context cancelled.
 func (p *ChatPresenter) sendMessage(msg ChatMessage) {
 	select {
 	case p.messagesChan <- msg:
-		// Message sent successfully
 	case <-p.ctx.Done():
-		// Context cancelled, stop sending
-	default:
-		// Channel full, could handle this differently (e.g., drop oldest, log warning)
 	}
 }
 
