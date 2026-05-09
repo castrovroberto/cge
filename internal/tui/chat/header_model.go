@@ -248,11 +248,24 @@ func (h *HeaderModel) RefreshGitInfo() {
 // GetHeight returns the header height based on display mode
 func (h *HeaderModel) GetHeight() int {
 	if h.multiLine && h.width >= 80 {
-		// Two bordered boxes: each takes 3 lines (border + content + border)
-		// Plus one line spacing between boxes
-		return 7 // 3 + 1 + 3
+		// App info box: 1 content line + 2 border lines = 3
+		// Separator newline: 1
+		// Session box: session content lines + 2 border lines
+		sessionLines := h.sessionLineCount()
+		return 3 + 1 + sessionLines + 2
 	}
 	return h.theme.HeaderHeight // Default single line
+}
+
+// sessionLineCount returns the number of content lines in the session box
+func (h *HeaderModel) sessionLineCount() int {
+	count := 3 // session line, workdir, model
+	count++    // provider
+	if h.gitRepo {
+		count++ // branch
+	}
+	count++ // status
+	return count
 }
 
 // GetSessionID returns the session ID
@@ -303,4 +316,70 @@ func (h *HeaderModel) IsGitRepo() bool {
 // GetSessionTime returns the session start time
 func (h *HeaderModel) GetSessionTime() time.Time {
 	return h.sessionTime
+}
+
+// GetWorkspaceContext returns the current workspace context from the header
+func (h *HeaderModel) GetWorkspaceContext() WorkspaceContextInfo {
+	return WorkspaceContextInfo{
+		WorkingDirectory: h.workingDir,
+		GitBranch:        h.gitBranch,
+		GitRepository:    h.gitRepo,
+		Provider:         h.provider,
+		ModelName:        h.modelName,
+		SessionID:        h.sessionID,
+		SessionUUID:      h.sessionUUID,
+	}
+}
+
+// FormatContextForLLM formats the header context for inclusion in LLM prompts
+func (h *HeaderModel) FormatContextForLLM() string {
+	var contextBuilder strings.Builder
+
+	contextBuilder.WriteString("## 🔍 Current Session Context\n\n")
+
+	// Working directory
+	workDir := h.workingDir
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		if strings.HasPrefix(workDir, homeDir) {
+			workDir = "~" + workDir[len(homeDir):]
+		}
+	}
+	contextBuilder.WriteString(fmt.Sprintf("**Working Directory:** `%s`\n", workDir))
+	contextBuilder.WriteString(fmt.Sprintf("**Absolute Path:** `%s`\n", h.workingDir))
+
+	// Git information
+	if h.gitRepo {
+		contextBuilder.WriteString(fmt.Sprintf("**Git Repository:** Yes\n"))
+		contextBuilder.WriteString(fmt.Sprintf("**Current Branch:** `%s`\n", h.gitBranch))
+	} else {
+		contextBuilder.WriteString("**Git Repository:** No\n")
+	}
+
+	// LLM configuration
+	contextBuilder.WriteString(fmt.Sprintf("**LLM Provider:** %s\n", h.provider))
+	contextBuilder.WriteString(fmt.Sprintf("**Model:** %s\n", h.modelName))
+
+	contextBuilder.WriteString("\n**Available Context Tools:**\n")
+	contextBuilder.WriteString("- `git_info`: Get detailed Git repository information\n")
+	contextBuilder.WriteString("- `list_directory`: Explore project structure and files\n")
+	contextBuilder.WriteString("- `codebase_search`: Search for code patterns and content\n")
+
+	contextBuilder.WriteString("\n**Instructions:**\n")
+	contextBuilder.WriteString("- Use the context tools proactively to understand the project structure\n")
+	contextBuilder.WriteString("- Check Git status before making changes\n")
+	contextBuilder.WriteString("- Explore the directory structure to understand the codebase\n")
+	contextBuilder.WriteString("- All file paths are relative to the working directory shown above\n\n")
+
+	return contextBuilder.String()
+}
+
+// WorkspaceContextInfo holds structured workspace context information
+type WorkspaceContextInfo struct {
+	WorkingDirectory string `json:"working_directory"`
+	GitBranch        string `json:"git_branch"`
+	GitRepository    bool   `json:"git_repository"`
+	Provider         string `json:"provider"`
+	ModelName        string `json:"model_name"`
+	SessionID        string `json:"session_id"`
+	SessionUUID      string `json:"session_uuid"`
 }

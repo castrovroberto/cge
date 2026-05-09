@@ -15,7 +15,7 @@ const (
 	ToolResultMessage // For displaying tool results
 	ErrorMessage
 	SystemMessage
-	// Add other types as needed
+	TurnComplete // Signals the end of a presenter turn; no display content
 )
 
 // ChatMessage represents a generic message in the chat system
@@ -27,6 +27,14 @@ type ChatMessage struct {
 	Timestamp time.Time              `json:"timestamp"` // When the message was created
 	Metadata  map[string]interface{} `json:"metadata"`  // For additional data like tool call details, error codes, etc.
 }
+
+// TurnCompleteMessage is sent by the MessageProvider after every turn (success or error)
+// so the TUI can reliably clear loading state.
+type TurnCompleteMessage struct{}
+
+// ProviderClosedMessage is delivered by listenForMessages when the provider's channel
+// is closed intentionally (e.g. on quit). It is distinct from an error.
+type ProviderClosedMessage struct{}
 
 // MessageProvider handles sending prompts and receiving chat messages.
 type MessageProvider interface {

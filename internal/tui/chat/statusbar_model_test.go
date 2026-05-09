@@ -2,7 +2,6 @@ package chat
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -119,9 +118,9 @@ func TestStatusBarModelView(t *testing.T) {
 
 	t.Run("active_tool_calls", func(t *testing.T) {
 		statusBar.ClearError()
-		statusBar.SetActiveToolCalls(2)
+		// Tool call display was removed; verify the view still renders cleanly
 		view := statusBar.View()
-		assert.Contains(t, view, "Active: 2", "Should show active tool calls count")
+		assert.NotEmpty(t, view, "Status bar should still render after clearing error")
 	})
 }
 
@@ -171,24 +170,6 @@ func TestStatusBarModelSpinner(t *testing.T) {
 	assert.NotNil(t, cmd, "Spinner tick command should not be nil when loading")
 }
 
-func TestStatusBarModelActiveToolCalls(t *testing.T) {
-	theme := NewDefaultTheme()
-	statusBar := NewStatusBarModel(theme, time.Now())
-
-	// Test different tool call counts
-	testCounts := []int{0, 1, 5, 10}
-	for _, count := range testCounts {
-		t.Run(fmt.Sprintf("tool_calls_%d", count), func(t *testing.T) {
-			statusBar.SetActiveToolCalls(count)
-			assert.Equal(t, count, statusBar.activeToolCalls, "Active tool calls count should be set correctly")
-
-			view := statusBar.View()
-			if count > 0 {
-				assert.Contains(t, view, fmt.Sprintf("Active: %d", count), "Should show tool calls count in view")
-			}
-		})
-	}
-}
 
 func TestStatusBarModelSessionStartTime(t *testing.T) {
 	startTime := time.Now().Add(-1 * time.Hour) // 1 hour ago

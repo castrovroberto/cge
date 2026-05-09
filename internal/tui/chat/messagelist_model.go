@@ -24,8 +24,6 @@ type MessageListModel struct {
 	placeholderIndex int
 	renderer         *glamour.TermRenderer
 	formatter        chroma.Formatter
-	progressRenderer *ProgressRenderer
-	activeToolCalls  map[string]*toolProgressState
 	width            int
 	height           int
 }
@@ -56,8 +54,6 @@ func NewMessageListModel(theme *Theme, width, height int) *MessageListModel {
 		placeholderIndex: -1,
 		renderer:         renderer,
 		formatter:        formatter,
-		progressRenderer: NewProgressRenderer(width),
-		activeToolCalls:  make(map[string]*toolProgressState),
 		width:            width,
 		height:           height,
 	}
@@ -69,30 +65,26 @@ func (ml *MessageListModel) Update(msg tea.Msg) (*MessageListModel, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		ml.width = msg.Width
-		ml.height = msg.Height
+		// Width is updated here; height is set by the parent via SetHeight after layout calc.
+		// viewport.Width is the total width including borders; it subtracts frame internally.
+		if msg.Width != ml.viewport.Width {
+			wFrame := ml.viewport.Style.GetHorizontalFrameSize()
+			contentWidth := msg.Width - wFrame
+			ml.width = contentWidth
+			ml.viewport.Width = msg.Width
 
-		// Update viewport dimensions
-		wFrame := ml.viewport.Style.GetHorizontalFrameSize()
-		ml.viewport.Width = msg.Width - wFrame
-		ml.viewport.Height = msg.Height
-
-		// Update progress renderer width
-		if ml.progressRenderer != nil {
-			ml.progressRenderer.width = msg.Width
-		}
-
-		// Update glamour renderer for new width
-		if ml.renderer != nil {
-			newRenderer, err := glamour.NewTermRenderer(
-				glamour.WithAutoStyle(),
-				glamour.WithWordWrap(ml.viewport.Width),
-			)
-			if err != nil {
-				logger.Get().Error("Failed to re-initialize glamour renderer on resize", "error", err)
-			} else {
-				ml.renderer = newRenderer
-				ml.rebuildViewport() // Rebuild with new width
+			// Update glamour renderer for new content width
+			if ml.renderer != nil {
+				newRenderer, err := glamour.NewTermRenderer(
+					glamour.WithAutoStyle(),
+					glamour.WithWordWrap(contentWidth),
+				)
+				if err != nil {
+					logger.Get().Error("Failed to re-initialize glamour renderer on resize", "error", err)
+				} else {
+					ml.renderer = newRenderer
+					ml.rebuildViewport()
+				}
 			}
 		}
 
@@ -112,11 +104,6 @@ func (ml *MessageListModel) View() string {
 func (ml *MessageListModel) AddMessage(msg chatMessage) {
 	if msg.timestamp.IsZero() {
 		msg.timestamp = time.Now()
-	}
-
-	// Process code blocks in markdown
-	if msg.isMarkdown {
-		msg.text = ml.processCodeBlocks(msg.text)
 	}
 
 	// Validate placeholder state before adding
@@ -226,17 +213,6 @@ func (ml *MessageListModel) rebuildViewport() {
 			b.WriteString(ml.formatRegularMessage(cm))
 		}
 		b.WriteString("\n\n") // Add spacing between messages
-	}
-
-	// Add active progress bars at the bottom
-	if len(ml.activeToolCalls) > 0 {
-		b.WriteString("\n" + strings.Repeat("─", ml.progressRenderer.width) + "\n")
-		b.WriteString("🔄 Active Operations:\n\n")
-
-		for _, state := range ml.activeToolCalls {
-			progressDisplay := ml.progressRenderer.RenderProgress(state)
-			b.WriteString(progressDisplay + "\n\n")
-		}
 	}
 
 	ml.viewport.SetContent(b.String())
@@ -388,6 +364,15 @@ func (ml *MessageListModel) highlightCode(code, language string) string {
 	return ml.theme.Code.Render(buf.String())
 }
 
+// SetWidth sets the viewport width. width is the full terminal width including borders.
+func (ml *MessageListModel) SetWidth(width int) {
+	if width != ml.viewport.Width {
+		wFrame := ml.viewport.Style.GetHorizontalFrameSize()
+		ml.width = width - wFrame
+		ml.viewport.Width = width
+	}
+}
+
 // SetHeight sets the viewport height
 func (ml *MessageListModel) SetHeight(height int) {
 	ml.height = height
@@ -413,12 +398,6 @@ func (ml *MessageListModel) LoadHistory(messages []chatMessage) {
 // GetMessages returns the current messages
 func (ml *MessageListModel) GetMessages() []chatMessage {
 	return ml.messages
-}
-
-// SetActiveToolCalls sets the active tool calls for progress tracking
-func (ml *MessageListModel) SetActiveToolCalls(activeToolCalls map[string]*toolProgressState) {
-	ml.activeToolCalls = activeToolCalls
-	ml.rebuildViewport() // Rebuild to show updated progress
 }
 
 // validatePlaceholderIndex checks if the placeholder index is valid

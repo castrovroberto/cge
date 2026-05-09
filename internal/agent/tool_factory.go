@@ -107,6 +107,29 @@ func (tf *ToolFactory) CreateReviewRegistry() *Registry {
 	return registry
 }
 
+// CreateChatRegistry creates a registry with tools suitable for interactive chat sessions
+func (tf *ToolFactory) CreateChatRegistry() *Registry {
+	registry := NewRegistry()
+
+	// Chat tools - includes AI-powered commit tool
+	registry.Register(NewFileReadTool(tf.workspaceRoot))
+	registry.Register(NewFileWriteTool(tf.workspaceRoot))
+	registry.Register(NewCodeSearchTool(tf.workspaceRoot))
+	registry.Register(tf.createListDirTool())
+	registry.Register(NewPatchApplyTool(tf.workspaceRoot))
+	registry.Register(NewShellRunTool(tf.workspaceRoot))
+	registry.Register(NewGitTool(tf.workspaceRoot))
+	registry.Register(NewGitCommitTool(tf.workspaceRoot))
+	// Note: AI commit tool will be added separately due to dependency injection needs
+	registry.Register(NewTestRunnerTool(tf.workspaceRoot))
+	registry.Register(NewLintRunnerTool(tf.workspaceRoot))
+	registry.Register(NewParseTestResultsTool(tf.workspaceRoot))
+	registry.Register(NewParseLintResultsTool(tf.workspaceRoot))
+	registry.Register(NewClarificationTool(tf.workspaceRoot))
+
+	return registry
+}
+
 // CreateFullRegistry creates a registry with all available tools
 func (tf *ToolFactory) CreateFullRegistry() *Registry {
 	registry := NewRegistry()

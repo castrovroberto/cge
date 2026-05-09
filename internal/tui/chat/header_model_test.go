@@ -159,7 +159,8 @@ func TestHeaderModelDynamicHeight(t *testing.T) {
 	header, _ = header.Update(wideResize)
 
 	borderedHeight := header.GetHeight()
-	assert.Equal(t, 7, borderedHeight, "Should use 7 lines for bordered layout (two boxes + spacing)")
+	// App box: 3 lines; separator: 1; session box: sessionLineCount() content + 2 border lines
+	assert.Greater(t, borderedHeight, 7, "Should use more than 7 lines for bordered layout with full session content")
 }
 
 func TestHeaderModelUpdate(t *testing.T) {

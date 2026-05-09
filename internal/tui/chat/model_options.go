@@ -57,3 +57,10 @@ func WithAvailableCommands(commands []string) ChatModelOption {
 		m.availableCommands = commands
 	}
 }
+
+// WithHeader sets the header model for the chat model
+func WithHeader(header *HeaderModel) ChatModelOption {
+	return func(m *Model) {
+		m.header = header
+	}
+}
